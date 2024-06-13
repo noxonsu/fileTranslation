@@ -1,21 +1,19 @@
-from flask import Flask, request, render_template, send_file
-from google.cloud import translate_v3beta1 as translate
 import os
-import io
-from PyPDF2 import PdfFileReader, PdfFileWriter
-from werkzeug.utils import secure_filename
+from google.cloud import translate_v3beta1 as translate
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['OUTPUT_FOLDER'] = 'outputs'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
+UPLOAD_FOLDER = 'uploads'
+OUTPUT_FOLDER = 'outputs'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# Initialize the Google Cloud Translation client
-translate_client = translate.TranslationServiceClient()
+# Path to your service account key file
+service_account_key_path = 'propartners-426310-fc4188025a16.json'
 
-def translate_document(input_path, output_path, target_language):
-    parent = "projects/YOUR_PROJECT_ID/locations/global"
+# Initialize the Google Cloud Translation client with the service account key file
+translate_client = translate.TranslationServiceClient.from_service_account_file(service_account_key_path)
+
+def translate_document(input_path, target_language):
+    parent = "projects/propartners-426310/locations/global"
 
     with open(input_path, "rb") as f:
         content = f.read()
@@ -25,8 +23,9 @@ def translate_document(input_path, output_path, target_language):
         mime_type="application/pdf"  # Mime types: text/plain, text/html, application/pdf, etc.
     )
 
-    gcs_destination = translate.GcsDestination(uri=output_path)
-    output_config = translate.DocumentOutputConfig(gcs_destination=gcs_destination)
+    output_config = translate.DocumentOutputConfig(
+        mime_type="application/pdf"  # The desired output mime type
+    )
 
     request = translate.TranslateDocumentRequest(
         parent=parent,
@@ -38,35 +37,24 @@ def translate_document(input_path, output_path, target_language):
     response = translate_client.translate_document(request=request)
     return response.document_translation.byte_stream_outputs[0]
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+def main():
+    file_path = 'zhenxianbao-paulaversnick.pdf'
+    target_language = "ru"
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return "No file part", 400
+    filename = os.path.basename(file_path)
+    input_path = os.path.join(UPLOAD_FOLDER, filename)
+    output_path = os.path.join(OUTPUT_FOLDER, 'translated_' + filename)
 
-    file = request.files['file']
-    if file.filename == '':
-        return "No selected file", 400
+    # Copy the file to the upload folder
+    with open(file_path, 'rb') as source_file, open(input_path, 'wb') as destination_file:
+        destination_file.write(source_file.read())
 
-    if not file.filename.lower().endswith('.pdf'):
-        return "Unsupported file type", 400
+    translated_content = translate_document(input_path, target_language)
 
-    filename = secure_filename(file.filename)
-    input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    output_path = os.path.join(app.config['OUTPUT_FOLDER'], 'translated_' + filename)
-    file.save(input_path)
-
-    target_language = request.form.get('target_language', 'en')
-    translated_content = translate_document(input_path, output_path, target_language)
-
-    output_file_path = os.path.join(app.config['OUTPUT_FOLDER'], 'translated_' + filename)
-    with open(output_file_path, "wb") as f:
+    with open(output_path, "wb") as f:
         f.write(translated_content)
 
-    return send_file(output_file_path, as_attachment=True)
+    print(f"Translation complete. Translated file saved as: {output_path}")
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    main()
