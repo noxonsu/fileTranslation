@@ -1,0 +1,4 @@
+Flask==2.1.2
+google-cloud-translate==3.9.0
+PyPDF2==1.26.0
+python-docx==0.8.11
