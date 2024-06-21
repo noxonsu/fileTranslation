@@ -5,7 +5,7 @@ const path = require('path');
 const { TranslationServiceClient } = require('@google-cloud/translate').v3beta1;
 
 const app = express();
-const port = 3000;
+const port = 3014;
 
 const upload = multer({ dest: 'uploads/' });
 const UPLOAD_FOLDER = 'uploads';
