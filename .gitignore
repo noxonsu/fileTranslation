@@ -1,2 +1,6 @@
 propartners-426310-fc4188025a16.json
 node_modules
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep

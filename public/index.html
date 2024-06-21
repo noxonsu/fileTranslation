@@ -4,20 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Translator</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-    <h1>Upload Document for Translation</h1>
-    <form id="upload-form" enctype="multipart/form-data">
-        <input type="file" id="file-input" name="file" accept=".pdf" required>
-        <label for="target-language">Target Language:</label>
-        <select id="target-language" name="target-language" required>
-            <option value="ru">Russian</option>
-            <!-- Add more language options as needed -->
-        </select>
-        <button type="submit">Upload and Translate</button>
-    </form>
-
-    <div id="result"></div>
+    <div class="container mt-5">
+        <h1 class="text-center">Upload Document for Translation</h1>
+        <form id="upload-form" enctype="multipart/form-data" class="mt-4">
+            <div class="form-group">
+                <label for="file-input">Choose a PDF file:</label>
+                <input type="file" id="file-input" name="file" accept=".pdf" class="form-control-file" required>
+            </div>
+            <div class="form-group">
+                <label for="target-language">Target Language:</label>
+                <select id="target-language" name="target-language" class="form-control" required>
+                    <option value="ru">Russian</option>
+                    <!-- Add more language options as needed -->
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Upload and Translate</button>
+        </form>
+        <div id="result" class="mt-4 text-center"></div>
+    </div>
 
     <script>
         document.getElementById('upload-form').addEventListener('submit', async (event) => {
@@ -34,9 +41,10 @@
             if (response.ok) {
                 const data = await response.json();
                 const resultDiv = document.getElementById('result');
-                resultDiv.innerHTML = `<a href="/download/${data.filename}" target="_blank">Download Translated Document</a>`;
+                resultDiv.innerHTML = `<a href="/download/${data.filename}" class="btn btn-success" target="_blank">Скачать переведенный документ (возможна задержка несколько секунд перед началом скачки)</a>`;
             } else {
-                console.error('Translation failed');
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `<div class="alert alert-danger">Translation failed</div>`;
             }
         });
     </script>
