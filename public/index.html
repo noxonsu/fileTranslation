@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Translator</title>
+</head>
+<body>
+    <h1>Upload Document for Translation</h1>
+    <form id="upload-form" enctype="multipart/form-data">
+        <input type="file" id="file-input" name="file" accept=".pdf" required>
+        <label for="target-language">Target Language:</label>
+        <select id="target-language" name="target-language" required>
+            <option value="ru">Russian</option>
+            <!-- Add more language options as needed -->
+        </select>
+        <button type="submit">Upload and Translate</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData();
+            formData.append('file', document.getElementById('file-input').files[0]);
+            formData.append('target-language', document.getElementById('target-language').value);
+
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `<a href="/download/${data.filename}" target="_blank">Download Translated Document</a>`;
+            } else {
+                console.error('Translation failed');
+            }
+        });
+    </script>
+</body>
+</html>
