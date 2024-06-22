@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 const { TranslationServiceClient } = require('@google-cloud/translate').v3beta1;
 
 const app = express();
@@ -13,6 +14,9 @@ const OUTPUT_FOLDER = 'outputs';
 
 const serviceAccountKeyPath = 'propartners-426310-fc4188025a16.json';
 const translate = new TranslationServiceClient({ keyFilename: serviceAccountKeyPath });
+
+// Enable CORS for all routes
+app.use(cors());
 
 app.use(express.static('public'));
 
