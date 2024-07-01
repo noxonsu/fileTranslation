@@ -27,6 +27,30 @@ app.use(express.static('public'));
 // Register the font for canvas
 registerFont(path.join(__dirname, 'fonts', 'Roboto-Regular.ttf'), { family: 'Roboto' });
 
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    const lines = [];
+
+    for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = context.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+            lines.push(line);
+            line = words[n] + ' ';
+        } else {
+            line = testLine;
+        }
+    }
+    lines.push(line);
+
+    for (let i = 0; i < lines.length; i++) {
+        context.fillText(lines[i], x, y);
+        y += lineHeight;
+    }
+}
+
 app.post('/upload', upload.single('file'), async (req, res) => {
     const filePath = path.join(__dirname, UPLOAD_FOLDER, req.file.filename);
     const targetLanguage = req.body['target-language'];
@@ -35,14 +59,37 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
     try {
         if (mimeType.startsWith('image/')) {
-            const [visionResult] = await visionClient.textDetection(filePath);
-            const detections = visionResult.textAnnotations;
-            if (detections.length === 0) {
+            const [visionResult] = await visionClient.documentTextDetection(filePath);
+            const detections = visionResult.fullTextAnnotation;
+            if (!detections) {
                 res.status(400).send('No text found in image');
                 return;
             }
 
-            const originalText = detections[0].description;
+            const pages = detections.pages;
+            let originalText = '';
+            const blocks = [];
+
+            pages.forEach(page => {
+                page.blocks.forEach(block => {
+                    let blockText = '';
+                    block.paragraphs.forEach(paragraph => {
+                        paragraph.words.forEach(word => {
+                            word.symbols.forEach(symbol => {
+                                blockText += symbol.text;
+                            });
+                            blockText += ' ';
+                        });
+                        blockText += '\n';
+                    });
+                    blocks.push({
+                        text: blockText.trim(),
+                        boundingBox: block.boundingBox.vertices
+                    });
+                    originalText += blockText + '\n';
+                });
+            });
+
             const [translation] = await translate.translateText({
                 parent: 'projects/propartners-426310/locations/global',
                 contents: [originalText],
@@ -51,7 +98,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             });
 
             const translatedText = translation.translations[0].translatedText.split('\n');
-            const originalTextAnnotations = detections.slice(1);
 
             const image = await Jimp.read(filePath);
 
@@ -61,20 +107,24 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             const img = await loadImage(filePath);
             ctx.drawImage(img, 0, 0);
 
-            // Set font and text properties
-            ctx.font = '32px Roboto';
-            ctx.fillStyle = 'black';
-            ctx.textBaseline = 'top';
-
-            for (let i = 0; i < originalTextAnnotations.length; i++) {
-                const annotation = originalTextAnnotations[i];
-                const boundingPoly = annotation.boundingPoly.vertices;
+            blocks.forEach((block, index) => {
+                const boundingPoly = block.boundingBox;
                 const x = boundingPoly[0].x;
                 const y = boundingPoly[0].y;
                 const width = boundingPoly[1].x - boundingPoly[0].x;
                 const height = boundingPoly[2].y - boundingPoly[0].y;
 
-                const textToWrite = translatedText[i] || '';
+                const textToWrite = translatedText[index] || '';
+
+                // Determine the font size dynamically
+                let fontSize = Math.min(32, height / 2);
+                ctx.font = `${fontSize}px Roboto`;
+
+                // Add padding
+                const padding = 5;
+                const textX = x + padding;
+                const textY = y + padding;
+                const maxWidth = width - padding * 2;
 
                 // Draw white rectangle as background for the text
                 ctx.fillStyle = 'white';
@@ -82,8 +132,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
                 // Draw the text
                 ctx.fillStyle = 'black';
-                ctx.fillText(textToWrite, x, y, width);
-            }
+                ctx.textBaseline = 'top';
+                wrapText(ctx, textToWrite, textX, textY, maxWidth, fontSize * 1.2);
+            });
 
             const outputPath = path.join(__dirname, OUTPUT_FOLDER, `translated_${originalName}`);
             const out = fs.createWriteStream(outputPath);
