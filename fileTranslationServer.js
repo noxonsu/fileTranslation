@@ -30,25 +30,24 @@ registerFont(path.join(__dirname, 'fonts', 'Roboto-Regular.ttf'), { family: 'Rob
 function wrapText(context, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
-    const lines = [];
+    let testLine = '';
+    let lineCount = 0;
 
     for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
+        testLine = line + words[n] + ' ';
         const metrics = context.measureText(testLine);
         const testWidth = metrics.width;
         if (testWidth > maxWidth && n > 0) {
-            lines.push(line);
+            context.fillText(line, x, y);
             line = words[n] + ' ';
-        } else {
+            y += lineHeight;
+            lineCount++;
+        }
+        else {
             line = testLine;
         }
     }
-    lines.push(line);
-
-    for (let i = 0; i < lines.length; i++) {
-        context.fillText(lines[i], x, y);
-        y += lineHeight;
-    }
+    context.fillText(line, x, y);
 }
 
 app.post('/upload', upload.single('file'), async (req, res) => {
@@ -67,7 +66,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             }
 
             const pages = detections.pages;
-            let originalText = '';
             const blocks = [];
 
             pages.forEach(page => {
@@ -86,18 +84,22 @@ app.post('/upload', upload.single('file'), async (req, res) => {
                         text: blockText.trim(),
                         boundingBox: block.boundingBox.vertices
                     });
-                    originalText += blockText + '\n';
                 });
             });
 
-            const [translation] = await translate.translateText({
-                parent: 'projects/propartners-426310/locations/global',
-                contents: [originalText],
-                mimeType: 'text/plain',
-                targetLanguageCode: targetLanguage
-            });
-
-            const translatedText = translation.translations[0].translatedText.split('\n');
+            // Translate each block separately
+            const translatedBlocks = await Promise.all(blocks.map(async (block) => {
+                const [translation] = await translate.translateText({
+                    parent: 'projects/propartners-426310/locations/global',
+                    contents: [block.text],
+                    mimeType: 'text/plain',
+                    targetLanguageCode: targetLanguage
+                });
+                return {
+                    ...block,
+                    translatedText: translation.translations[0].translatedText
+                };
+            }));
 
             const image = await Jimp.read(filePath);
 
@@ -107,24 +109,24 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             const img = await loadImage(filePath);
             ctx.drawImage(img, 0, 0);
 
-            blocks.forEach((block, index) => {
+            translatedBlocks.forEach((block) => {
                 const boundingPoly = block.boundingBox;
                 const x = boundingPoly[0].x;
                 const y = boundingPoly[0].y;
                 const width = boundingPoly[1].x - boundingPoly[0].x;
                 const height = boundingPoly[2].y - boundingPoly[0].y;
 
-                const textToWrite = translatedText[index] || '';
+                const textToWrite = block.translatedText;
 
-                // Determine the font size dynamically
-                let fontSize = Math.min(32, height / 2);
+                // Calculate adaptive font size
+                const fontSize = Math.min(Math.floor(height / 2), 13); // Max font size of 24px
                 ctx.font = `${fontSize}px Roboto`;
 
-                // Add padding
-                const padding = 5;
-                const textX = x + padding;
-                const textY = y + padding;
-                const maxWidth = width - padding * 2;
+                // Calculate the position to start the text
+                const textX = x + 2;
+                const textY = y + 2;
+                const maxWidth = width - 4;
+                const lineHeight = fontSize * 1.2;
 
                 // Draw white rectangle as background for the text
                 ctx.fillStyle = 'white';
@@ -133,7 +135,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
                 // Draw the text
                 ctx.fillStyle = 'black';
                 ctx.textBaseline = 'top';
-                wrapText(ctx, textToWrite, textX, textY, maxWidth, fontSize * 1.2);
+                wrapText(ctx, textToWrite, textX, textY, maxWidth, lineHeight);
             });
 
             const outputPath = path.join(__dirname, OUTPUT_FOLDER, `translated_${originalName}`);
