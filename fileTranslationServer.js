@@ -119,7 +119,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
                 const textToWrite = block.translatedText;
 
                 // Calculate adaptive font size
-                const fontSize = Math.min(Math.floor(height / 2), 13); // Max font size of 24px
+                const fontSize = 8; 
                 ctx.font = `${fontSize}px Roboto`;
 
                 // Calculate the position to start the text
